@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Technology Stack
+
+The chosen technology stack for the LLM Mafia project is outlined in [tech-stack.md](mdc:tech-stack.md).
+
+This includes:
+*   Frontend: React
+*   Backend: Python + FastAPI
+*   Real-time: WebSockets
+*   LLM Integration: Provider's Python Client
+*   State Management: In-Memory / File-based (initially)
+
+Refer to this document for details on the project's technical implementation.
+
+Remember to leverage the chosen technologies (e.g., React components, FastAPI routers) to create modular code and avoid monolithic files.

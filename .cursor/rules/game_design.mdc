@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Game Design Document
+
+The core concept, mechanics, roles, phases, AI requirements, and UI/UX for the LLM Mafia game are detailed in the Game Design Document: [game_design_document.md](mdc:game_design_document.md).
+
+Refer to this document for questions about how the game should function.
+
+When implementing features based on this design, prioritize modular code organization and avoid creating monolithic files.
