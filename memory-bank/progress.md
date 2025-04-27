@@ -19,5 +19,18 @@
 
 All directories have been successfully created with the intended structure as per the implementation plan. The README.md provides a basic overview of the project for future developers and users.
 
+### Step 2: Setup Backend (FastAPI) (2025-04-27)
+
+- [x] Set up a Python virtual environment (`venv`)
+- [x] Installed core dependencies: `fastapi`, `uvicorn`, `python-dotenv`, `pydantic`, `websockets`
+- [x] Created basic FastAPI app in `backend/app/main.py` with a health check endpoint
+- [x] Created `backend/app/core/config.py` with settings loaded from environment variables
+- [x] Created empty `__init__.py` files in all directories
+- [x] Created `.gitignore` file to exclude environment files and data
+- [x] Created `requirements.txt` file with dependencies
+- [x] Verified backend is working by running the server and testing health endpoint
+
+The backend server is now set up with a basic FastAPI application structure and a working health check endpoint. Configuration is managed through environment variables and the application is ready for implementing the core game models and logic.
+
 ### Next Steps
-- Step 2: Setup Backend (FastAPI) - Pending validation
+- Step 3: Define Core Game Models - Pending validation

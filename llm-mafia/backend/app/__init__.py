@@ -1,0 +1,1 @@
+# LLM Mafia Game application package 

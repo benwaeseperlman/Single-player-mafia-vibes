@@ -1,0 +1,47 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+wheels/
+*.egg
+MANIFEST
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data files
+backend/data/*.json
+
+# Node.js (for frontend)
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+.pnp/
+.pnp.js
+coverage/
+build/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local 
