@@ -1,9 +1,8 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from uuid import UUID
 from enum import Enum
 from typing import Optional
 from datetime import datetime
-from pydantic import ConfigDict
 
 
 class ActionType(str, Enum):
