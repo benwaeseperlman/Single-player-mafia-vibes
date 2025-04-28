@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Import the router
+from app.api import game_endpoints
+
 app = FastAPI(
     title="LLM Mafia Game",
     description="Single-player Mafia game with LLM-powered AI players",
@@ -24,6 +27,7 @@ async def health_check():
 # Include routers here as they are developed
 # from app.api import game_endpoints
 # app.include_router(game_endpoints.router, prefix="/api")
+app.include_router(game_endpoints.router, prefix="/api", tags=["Game Management"])
 
 if __name__ == "__main__":
     import uvicorn

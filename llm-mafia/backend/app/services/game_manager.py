@@ -172,3 +172,4 @@ class GameManager:
 
 # Optional: Instantiate a global game manager instance if desired
 # game_manager = GameManager() 
+game_manager = GameManager() # Make the instance available globally 

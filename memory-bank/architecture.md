@@ -52,7 +52,7 @@ The application follows a client-server architecture:
 11. `app/services/phase_logic.py` - *Pending Implementation*
 12. `app/services/action_service.py` - *Pending Implementation*
 13. `app/services/llm_service.py` - *Pending Implementation*
-14. `app/api/game_endpoints.py` - *Pending Implementation*
+14. `app/api/game_endpoints.py` - Implemented (Basic create/get/list endpoints, tested)
 15. `app/api/websocket_manager.py` - *Pending Implementation*
 
 ### Frontend Structure (Planned)

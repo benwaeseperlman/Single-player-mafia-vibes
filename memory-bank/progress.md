@@ -81,5 +81,19 @@ State persistence service is implemented within `llm-mafia/backend/app/services`
 The `GameManager` service is implemented and unit tested. It provides core logic for creating new games, managing player lists with role assignments, retrieving game states (from cache or storage), and updating/persisting game states, ensuring consistent use of UUIDs internally. Testing setup required adding `setup.py` and modifying `sys.path` in tests.
 *Unit tests written and passed.*
 
+### Step 6: Setup Initial API Endpoint (Current Date - replace with actual date)
+
+- [x] Created `llm-mafia/backend/app/api/game_endpoints.py` with FastAPI router.
+- [x] Implemented `POST /api/game` endpoint to create a game using `GameManager`.
+- [x] Implemented `GET /api/game/{game_id}` endpoint to retrieve game state using `GameManager`.
+- [x] Implemented `GET /api/games` endpoint to list saved games using `state_service`.
+- [x] Included the `game_endpoints` router in `llm-mafia/backend/app/main.py`.
+- [x] Refactored to use a global `GameManager` instance.
+- [x] Added `httpx` dependency for testing.
+- [x] Created unit tests (`llm-mafia/backend/tests/test_game_endpoints.py`) covering endpoints.
+
+Initial API endpoints for basic game management (create, get, list) are implemented and integrated into the main FastAPI application. Basic error handling (400, 404, 500) is included.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 6: Setup Initial API Endpoint (`llm-mafia/backend/app/api/game_endpoints.py`) - *Not Started*
+- Step 7: Implement Phase Logic (`llm-mafia/backend/app/services/phase_logic.py`) - *Not Started*
