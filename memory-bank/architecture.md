@@ -13,9 +13,11 @@ The application follows a client-server architecture:
 
 ## Directory Structure
 
-### Root Level
+**IMPORTANT:** All source code, tests, configuration files (like Dockerfiles, .env templates), and related assets MUST reside within the `llm-mafia` directory. The root workspace directory should only contain the `llm-mafia` project folder and potentially top-level git files (like `.gitignore`). The `memory-bank` directory is strictly for documentation and progress tracking, not functional code.
 
-- `README.md` - Project overview and basic documentation
+### Root Level (within `llm-mafia`)
+
+- `README.md` - Project overview and basic documentation (specific to the `llm-mafia` project)
 - `backend/` - Server-side code (Python/FastAPI)
 - `frontend/` - Client-side code (React)
 
