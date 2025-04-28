@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Unit Testing After Implementation Steps
 
@@ -13,3 +13,4 @@ Ensure tests cover:
 - Error handling
 
 Reference the relevant service files (e.g., [game_manager.py](mdc:llm-mafia/backend/app/services/game_manager.py)) and models when writing tests.
+~
