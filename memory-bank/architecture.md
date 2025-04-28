@@ -25,32 +25,35 @@ The application follows a client-server architecture:
 
 - `backend/app/` - Main application code
   - `core/` - Core functionality and configuration
-    - Will contain configuration management, environment variables, security utilities
+    - Contains configuration management (`config.py`)
   - `models/` - Data models (Pydantic)
-    - Will define the structure for game state, players, actions, etc.
+    - Defines structures for players, game state, settings, actions, personas, memory.
   - `api/` - API endpoint definitions
-    - Will contain FastAPI routers for REST endpoints and WebSocket handlers
+    - Contains FastAPI routers (e.g., `game_endpoints.py` - *To be implemented*)
   - `services/` - Business logic
-    - Will implement game mechanics, LLM interaction, state management
-- `backend/data/` - Persistent storage location for game state files
+    - Implements game mechanics (e.g., `game_manager.py`), state management (`state_service.py`).
+- `backend/data/` - Persistent storage location for game state files (JSON).
+- `backend/tests/` - Unit and integration tests (`pytest`).
+- `backend/setup.py` - Script to make the backend installable for testing.
+- `backend/pytest.ini` - Pytest configuration file (used to help with imports).
 
-#### Planned Backend Files (To be implemented)
+#### Backend Files Status
 
-1. `app/main.py` - Application entry point and FastAPI app instance
-2. `app/core/config.py` - Configuration settings and environment variables
-3. `app/models/player.py` - Player models and role definitions  
-4. `app/models/game.py` - Game state and phase definitions
-5. `app/models/settings.py` - Game settings model
-6. `app/models/actions.py` - Models for night actions and voting
-7. `app/models/persona.py` - AI persona definitions
-8. `app/models/memory.py` - AI memory model
-9. `app/services/state_service.py` - Game state serialization and persistence
-10. `app/services/game_manager.py` - Game creation and management
-11. `app/services/phase_logic.py` - Game phase transitions and logic
-12. `app/services/action_service.py` - Role action handling
-13. `app/services/llm_service.py` - LLM integration for AI behaviors
-14. `app/api/game_endpoints.py` - Game-related API endpoints
-15. `app/api/websocket_manager.py` - WebSocket connection management
+1.  `app/main.py` - Implemented (Basic app, health check, CORS)
+2.  `app/core/config.py` - Implemented (Loads settings from .env)
+3.  `app/models/player.py` - Implemented
+4.  `app/models/game.py` - Implemented
+5.  `app/models/settings.py` - Implemented
+6.  `app/models/actions.py` - Implemented
+7.  `app/models/persona.py` - Implemented
+8.  `app/models/memory.py` - Implemented
+9.  `app/services/state_service.py` - Implemented (File-based JSON persistence)
+10. `app/services/game_manager.py` - Implemented (Handles game creation, retrieval, updates, role assignment, caching. Uses `settings_id` and UUIDs consistently.)
+11. `app/services/phase_logic.py` - *Pending Implementation*
+12. `app/services/action_service.py` - *Pending Implementation*
+13. `app/services/llm_service.py` - *Pending Implementation*
+14. `app/api/game_endpoints.py` - *Pending Implementation*
+15. `app/api/websocket_manager.py` - *Pending Implementation*
 
 ### Frontend Structure (Planned)
 

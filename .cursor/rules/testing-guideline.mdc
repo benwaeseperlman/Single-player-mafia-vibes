@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Unit Testing After Implementation Steps
+
+After completing the implementation of a step outlined in the [implementation-plan.md](mdc:memory-bank/implementation-plan.md), immediately proceed to create comprehensive unit tests for the newly added or modified code.
+
+Ensure tests cover:
+- Core functionality
+- Edge cases
+- Error handling
+
+Reference the relevant service files (e.g., [game_manager.py](mdc:llm-mafia/backend/app/services/game_manager.py)) and models when writing tests.
