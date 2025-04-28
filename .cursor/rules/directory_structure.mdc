@@ -1,5 +1,16 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Project Directory Structure
+
+**IMPORTANT:** All source code, tests, configuration files (like Dockerfiles, `.env` templates), and related assets **MUST** reside within the `llm-mafia` directory.
+
+The root workspace directory should only contain:
+* The `llm-mafia` project folder.
+* Top-level git files (e.g., `.gitignore`).
+
+The `memory-bank` directory is **strictly** for documentation and progress tracking, *not* for functional code or assets.
+
+Refer to [architecture.md](mdc:memory-bank/architecture.md) for the detailed structure breakdown within `llm-mafia`.
