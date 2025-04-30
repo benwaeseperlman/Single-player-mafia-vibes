@@ -197,5 +197,33 @@ Basic LLM integration for AI night actions is implemented and unit tested. AI pl
 AI players now generate chat messages during the Day phase using the LLM, considering game context, their role, and recent conversation. Messages are stored in the game state. Unit tests cover the LLM service method and its integration into the phase logic.
 *Unit tests written and passed.*
 
+### Step 12: Implement LLM Integration (for AI Voting) (2025-04-29 - Replace with actual date)
+
+- [x] Added `determine_ai_vote` method to `llm-mafia/backend/app/services/llm_service.py`.
+    - [x] Implemented prompt generation (`_generate_voting_prompt`) including game state, chat history, role goals, and private info (Mafia allies, Detective results).
+    - [x] Added logic to exclude Mafia allies from the list of valid targets in the prompt.
+    - [x] Uses OpenAI `chat.completions` with JSON mode.
+    - [x] Parses response and returns the chosen player's `UUID`.
+    - [x] Includes validation (ensure target is living, handle non-UUID response) and fallback logic (random choice among valid targets).
+- [x] Integrated `determine_ai_vote` into `llm-mafia/backend/app/services/phase_logic.py` (`advance_to_voting`).
+    - [x] Calls LLM service for each living AI player after clearing previous votes.
+    - [x] Directly stores the returned `UUID` (or None) in `game_state.votes`.
+    - [x] Handles LLM service errors gracefully.
+- [x] Added unit tests for `determine_ai_vote` in `llm-mafia/backend/tests/test_llm_service.py`.
+    - [x] Mocked OpenAI API calls.
+    - [x] Tested prompt generation (including ally exclusion).
+    - [x] Tested successful vote determination for different roles.
+    - [x] Tested error handling (API, JSON, missing key) and fallback logic.
+    - [x] Debugged and fixed multiple issues related to prompt generation filtering and test assertions.
+- [x] Added unit tests for `advance_to_voting` integration in `llm-mafia/backend/tests/test_phase_logic.py`.
+    - [x] Mocked `llm_service.determine_ai_vote`.
+    - [x] Verified calls to LLM service for living AI players.
+    - [x] Verified votes are correctly added to `game_state.votes`.
+    - [x] Verified error handling.
+    - [x] Debugged and fixed issues related to history message assertions, vote dictionary formats (UUIDs), and mock setups.
+
+AI players now use the LLM to determine their vote during the Voting phase based on game state, chat, and role objectives. Votes are recorded directly in the game state. Unit tests cover the new LLM service method and its integration into the phase logic.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 12: Implement LLM Integration (for AI Voting) - *Not Started*
+- Step 13: Implement WebSocket Manager and Integration - *Not Started*

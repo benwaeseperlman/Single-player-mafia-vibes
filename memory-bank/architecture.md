@@ -50,9 +50,9 @@ The application follows a client-server architecture:
 8.  `app/models/memory.py` - Implemented
 9.  `app/services/state_service.py` - Implemented (File-based JSON persistence)
 10. `app/services/game_manager.py` - Implemented (Handles game creation, retrieval, updates, role assignment, caching. Uses `settings_id` and UUIDs consistently.)
-11. `app/services/phase_logic.py` - Implemented (Phase transitions, action/voting resolution, win conditions, basic AI action/message triggers)
+11. `app/services/phase_logic.py` - Implemented (Phase transitions, action/voting resolution, win conditions, basic AI action/message triggers, AI voting trigger)
 12. `app/services/action_service.py` - Implemented (Records night actions with validation)
-13. `app/services/llm_service.py` - Implemented (Handles AI night action determination and day message generation using OpenAI)
+13. `app/services/llm_service.py` - Implemented (Handles AI night action determination, day message generation, and voting determination using OpenAI)
 14. `app/api/game_endpoints.py` - Implemented (Basic create/get/list endpoints)
 15. `app/api/websocket_manager.py` - *Not Started*
 

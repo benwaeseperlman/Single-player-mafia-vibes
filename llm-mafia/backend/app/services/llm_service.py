@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 from openai import OpenAI, OpenAIError
 import json
+import random # Added for fallback logic
 
 from ..core.config import settings, LLMProvider
 from ..models.game import GameState
@@ -150,7 +151,6 @@ Respond ONLY with a JSON object containing the key 'target_player_id' and the ch
 
                 # If conversion failed or target is invalid, use fallback
                 if target_player_uuid is None:
-                    import random
                     if not valid_target_ids: # Should not happen if prompt generation worked
                          raise LLMServiceError(f"No valid targets available for Player {ai_player.id} ({ai_player.role.value}) fallback.")
                     target_player_uuid = random.choice(list(valid_target_ids))
@@ -295,6 +295,180 @@ Respond ONLY with a JSON object containing the key 'chat_message' and your messa
              raise LLMServiceError(f"Failed to parse LLM JSON response: {e}") from e
         except Exception as e:
             logger.error(f"Unexpected error during day message generation for Player {ai_player.id}: {e}")
+            raise LLMServiceError(f"Unexpected error: {e}") from e
+
+    def _generate_voting_prompt(self, ai_player: Player, game_state: GameState) -> str:
+        """Generates a prompt for the LLM to decide who to VOTE for."""
+        living_players = [p for p in game_state.players if p.status == PlayerStatus.ALIVE]
+        player_list_str = "\n".join([f"- Player {p.id}: Status {p.status.value}" + (f" (You, Role: {ai_player.role.value})" if p.id == ai_player.id else "") for p in game_state.players])
+
+        # History and Chat
+        history_summary = "Recent Events/Announcements:\n" + "\n".join(game_state.history[-5:]) if game_state.history else "No recent events."
+        chat_summary = "Recent Chat Messages:\n"
+        recent_chats = game_state.chat_history # Use the new field
+        if recent_chats:
+             chat_summary += "\n".join([f"- Player {msg.player_id}: {msg.message}" for msg in recent_chats[-15:]]) # Last 15 messages for voting context
+        else:
+            chat_summary += "No recent chat messages."
+
+        # Role-specific voting goal
+        role_goal = {
+            Role.MAFIA: "Your goal is to eliminate Innocents. Vote strategically to lynch an Innocent, preferably someone suspicious or who suspects you. Coordinate votes with allies if possible (though direct coordination isn't simulated here). Avoid voting for fellow Mafia.",
+            Role.DETECTIVE: "Your goal is to identify Mafia. Use your investigation results and observations from discussion to vote for a likely Mafia member. Try to lead other Innocents.",
+            Role.DOCTOR: "Your goal is to help Innocents win. Vote based on suspicions developed during discussion. Protect Innocents.",
+            Role.VILLAGER: "Your goal is to identify and lynch Mafia members. Vote based on discussion, behavior, and any evidence presented."
+        }.get(ai_player.role, "Your goal is to help your faction win.")
+
+        # Private info
+        private_info = ""
+        if ai_player.role == Role.DETECTIVE and ai_player.investigation_result:
+            private_info = f"\nYour Private Information: {ai_player.investigation_result}"
+        elif ai_player.role == Role.MAFIA:
+            mafia_allies = [p for p in game_state.players if p.role == Role.MAFIA and p.id != ai_player.id and p.status == PlayerStatus.ALIVE]
+            if mafia_allies:
+                private_info = f"\nYour Mafia Allies (DO NOT VOTE FOR THEM): {', '.join([str(ally.id) for ally in mafia_allies])}"
+
+        # Valid voting targets (living players, usually including self, but depends on rules - let's allow self-vote)
+        # Mafia should ideally not vote for other Mafia
+        potential_targets = [p for p in living_players] # Default: all living players
+        mafia_allies_ids = set()
+        if ai_player.role == Role.MAFIA:
+             # Find allies correctly
+             mafia_allies = [p for p in game_state.players if p.role == Role.MAFIA and p.id != ai_player.id and p.status == PlayerStatus.ALIVE]
+             if mafia_allies:
+                 mafia_allies_ids = {ally.id for ally in mafia_allies}
+                 private_info = f"\nYour Mafia Allies (DO NOT VOTE FOR THEM): {', '.join([str(ally.id) for ally in mafia_allies])}"
+                 # Filter directly from living_players based on the ally IDs set
+                 potential_targets = [p for p in living_players if p.id not in mafia_allies_ids]
+
+        if not potential_targets:
+             # If filtering left no one (e.g., only Mafia left), fall back to all living players
+             logger.warning(f"AI Player {ai_player.id} ({ai_player.role.value}) has no valid targets to vote for after exclusion. Allowing vote for anyone living.")
+             potential_targets = living_players
+        
+        # If still no targets (should be impossible if game isn't over)
+        if not potential_targets and living_players:
+            logger.error(f"AI Player {ai_player.id} ({ai_player.role.value}) has absolutely no targets to vote for, even after fallback. Using self as target.")
+            potential_targets = [ai_player] # Default to self if absolutely necessary
+        elif not living_players:
+             logger.error(f"AI Player {ai_player.id} ({ai_player.role.value}) has no living players to target. Skipping prompt.")
+             return ""
+
+        target_list_str = "\n".join([f"- Player {p.id}" for p in potential_targets])
+
+        prompt = f"""
+You are Player {ai_player.id}, an AI playing Mafia.
+Your Role: {ai_player.role.value}
+{role_goal}{private_info}
+
+Game State:
+Current Phase: Day {game_state.day_number} Voting
+Living Players: {len(living_players)}
+
+Player List:
+{player_list_str}
+
+{history_summary}
+
+{chat_summary}
+
+Available Players to Vote For:
+{target_list_str}
+
+Task: Decide who to vote for to lynch. Consider the discussion, your role's goal, and any private information. Choose one player ID from the 'Available Players to Vote For' list.
+Respond ONLY with a JSON object containing the key 'voted_player_id' and the chosen player ID as the value. Example: {{"voted_player_id": "player_uuid_here"}}
+"""
+        return prompt.strip()
+
+    def determine_ai_vote(self, ai_player: Player, game_state: GameState) -> Optional[UUID]:
+        """Uses the LLM to determine which player an AI agent should vote for."""
+        if not self.client:
+            return None # No client initialized
+
+        prompt = self._generate_voting_prompt(ai_player, game_state)
+        if not prompt:
+             logger.warning(f"Could not generate voting prompt for AI Player {ai_player.id}. Skipping vote.")
+             return None
+
+        logger.info(f"Generating vote for AI Player {ai_player.id} ({ai_player.role.value}) using {self.provider.value}")
+        logger.debug(f"LLM Prompt for Player {ai_player.id} Vote:\n{prompt}")
+
+        try:
+            if self.provider == LLMProvider.OPENAI:
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo-0125",
+                    messages=[
+                        {"role": "system", "content": "You are an AI player in a game of Mafia, currently deciding who to vote for."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.5, # Lower temp for more deterministic voting based on context
+                    max_tokens=50,
+                    response_format={"type": "json_object"}
+                )
+                response_content = response.choices[0].message.content
+                logger.debug(f"LLM raw response for Player {ai_player.id} Vote: {response_content}")
+
+                if not response_content:
+                    raise LLMServiceError("LLM returned empty content for vote.")
+
+                vote_data = json.loads(response_content)
+                voted_player_id_str = vote_data.get('voted_player_id')
+
+                if not voted_player_id_str:
+                    raise LLMServiceError(f"LLM response missing 'voted_player_id'. Response: {response_content}")
+
+                # Validate voted_player_id
+                living_player_ids = {p.id for p in game_state.players if p.status == PlayerStatus.ALIVE}
+                # Define stricter valid targets based on prompt generation logic if possible
+                valid_target_ids = set()
+                living_players = [p for p in game_state.players if p.status == PlayerStatus.ALIVE]
+                mafia_allies_ids = set() # Define outside the if block
+                if ai_player.role == Role.MAFIA:
+                    mafia_allies_ids = {p.id for p in game_state.players if p.role == Role.MAFIA and p.id != ai_player.id and p.status == PlayerStatus.ALIVE}
+                    valid_target_ids = {p.id for p in living_players if p.id not in mafia_allies_ids}
+                else:
+                    valid_target_ids = {p.id for p in living_players} # Correctly get all living IDs
+                
+                if not valid_target_ids and living_player_ids: # Fallback if exclusion left no targets but players exist
+                    logger.warning(f"Mafia {ai_player.id} exclusion logic resulted in no valid targets. Allowing vote for any living player.")
+                    valid_target_ids = living_player_ids
+
+                voted_player_uuid: Optional[UUID] = None
+                try:
+                    potential_vote_uuid = UUID(voted_player_id_str)
+                    if potential_vote_uuid in valid_target_ids:
+                        voted_player_uuid = potential_vote_uuid
+                    elif potential_vote_uuid in living_player_ids: # Check if it's at least a living player, even if invalid (e.g., Mafia voting ally)
+                        logger.warning(f"LLM for Player {ai_player.id} chose a living player '{voted_player_id_str}' but it might be invalid (e.g., Mafia ally). Allowing vote but logging warning.")
+                        voted_player_uuid = potential_vote_uuid # Allow potentially invalid but living target
+                    else:
+                        logger.warning(f"LLM for Player {ai_player.id} chose an invalid or dead UUID '{voted_player_id_str}'. Falling back.")
+                except ValueError:
+                    logger.warning(f"LLM for Player {ai_player.id} provided a non-UUID vote target '{voted_player_id_str}'. Falling back.")
+
+                # Fallback: Choose a random valid target if LLM failed
+                if voted_player_uuid is None:
+                    if not valid_target_ids:
+                        logger.error(f"No valid targets available for Player {ai_player.id} ({ai_player.role.value}) vote fallback.")
+                        return None # Cannot determine vote
+                    voted_player_uuid = random.choice(list(valid_target_ids))
+                    logger.info(f"Fallback chose vote target {voted_player_uuid} for Player {ai_player.id}")
+                
+                return voted_player_uuid # Return the chosen player's UUID
+
+            # TODO: Add logic for other providers
+            else:
+                logger.warning(f"LLM provider {self.provider.value} not implemented yet for voting.")
+                return None
+
+        except OpenAIError as e:
+            logger.error(f"OpenAI API error determining vote for Player {ai_player.id}: {e}")
+            raise LLMServiceError(f"OpenAI API error: {e}") from e
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON response for vote for Player {ai_player.id}. Response: '{response_content}'. Error: {e}")
+            raise LLMServiceError(f"Failed to parse LLM JSON response: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error determining vote for Player {ai_player.id}: {e}")
             raise LLMServiceError(f"Unexpected error: {e}") from e
 
 # Global instance (consider dependency injection later if needed)
