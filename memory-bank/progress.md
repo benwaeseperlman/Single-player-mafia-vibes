@@ -95,5 +95,23 @@ The `GameManager` service is implemented and unit tested. It provides core logic
 Initial API endpoints for basic game management (create, get, list) are implemented and integrated into the main FastAPI application. Basic error handling (400, 404, 500) is included.
 *Unit tests written and passed.*
 
+## Phase 2: Core Game Logic & LLM Integration (Backend)
+
+### Step 7: Implement Phase Logic (2025-04-28 - Replace with actual date)
+
+- [x] Created `llm-mafia/backend/app/services/phase_logic.py`.
+- [x] Implemented `advance_to_night`: Updates phase, increments day, clears actions/votes, saves state.
+- [x] Implemented `advance_to_day`: Processes night actions (placeholder logic), checks win conditions, updates phase, saves state.
+- [x] Implemented `advance_to_voting`: Updates phase, clears votes, saves state.
+- [x] Implemented `process_voting_and_advance`: Tallies votes, handles lynching/ties, updates status, checks win conditions, advances phase, saves state.
+- [x] Implemented `_check_win_condition` helper.
+- [x] Implemented `_resolve_night_actions` helper (placeholder logic).
+- [x] Included calls to `save_game_state` at appropriate points.
+- [x] Created unit tests (`llm-mafia/backend/tests/test_phase_logic.py`) covering phase transitions, win conditions, placeholder actions/voting, and helper functions.
+- [x] Debugged and fixed several issues identified by tests (imports, model usage, assertion logic, mock setup).
+
+Core phase transition logic (Night -> Day -> Voting -> Night) is implemented in `phase_logic.py`. Includes win condition checking and placeholder night action/voting resolution. Comprehensive unit tests ensure logic correctness.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 7: Implement Phase Logic (`llm-mafia/backend/app/services/phase_logic.py`) - *Not Started*
+- Step 8: Implement Role Action Logic (`llm-mafia/backend/app/services/action_service.py`) - *Not Started*
