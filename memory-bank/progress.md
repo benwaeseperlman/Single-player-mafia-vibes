@@ -125,5 +125,29 @@ Core phase transition logic (Night -> Day -> Voting -> Night) is implemented in 
 The `ActionService` provides the core functionality for recording night actions (Mafia Kill, Detective Investigate, Doctor Protect). It includes validation logic to ensure actions are permissible according to game rules and player state. Unit tests verify the service's behavior.
 *Unit tests written and passed.*
 
+### Step 9: Implement Action Resolution Logic (2025-04-29 - Replace with actual date)
+
+- [x] Updated `_resolve_night_actions` in `llm-mafia/backend/app/services/phase_logic.py` to replace placeholder logic.
+- [x] Implemented logic to:
+    - Identify Mafia kill target from `game_state.night_actions`.
+    - Identify Doctor protection target.
+    - Determine if the Doctor's save was successful against the Mafia kill.
+    - Update the `status` of the killed player (if any) to `DEAD`.
+    - Store the result of the Detective's investigation privately.
+    - Generate appropriate public announcements for the Day phase (kill/save/peaceful night).
+    - Log internal choices/results (e.g., Doctor protection choice, Detective result) to game history.
+    - Clear `game_state.night_actions` after resolution.
+- [x] Added `is_saved: bool` and `investigation_result: Optional[str]` fields to `llm-mafia/backend/app/models/player.py` to support action resolution state.
+- [x] Created new unit tests specifically for `_resolve_night_actions` in `llm-mafia/backend/tests/test_phase_logic.py`, covering kills, saves, investigations, and edge cases.
+- [x] Removed obsolete tests for the previous placeholder logic.
+- [x] Debugged and fixed test failures related to:
+    - Missing `game_state_night` fixture.
+    - `ValueError: "Player" object has no field "is_saved"` (added field to `Player` model).
+    - `AttributeError: 'str' object has no attribute 'value'` (corrected enum handling in model config and test fixtures).
+    - `NameError: name '_resolve_night_actions' is not defined` (corrected test function call).
+
+Night action resolution logic is now implemented and tested, correctly handling interactions between Mafia, Doctor, and Detective roles based on actions recorded in the game state.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 9: Implement Action Resolution Logic (in `phase_logic.py` or `action_service.py`) - *Not Started*
+- Step 10: Implement Basic LLM Integration (for AI Night Actions) - *Not Started*

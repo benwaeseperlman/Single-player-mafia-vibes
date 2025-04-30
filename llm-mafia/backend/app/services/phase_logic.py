@@ -1,4 +1,5 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+from uuid import UUID
 import random
 
 from app.models.game import GamePhase, GameState
@@ -10,6 +11,15 @@ from app.models.player import Player, PlayerStatus, Role
 from .state_service import save_game_state
 # Import action service when available (Step 8)
 # from .action_service import get_pending_actions, clear_pending_actions
+
+# Import action models
+from app.models.actions import (
+    ActionType,
+    BaseAction,
+    MafiaKillAction,
+    DetectiveInvestigateAction,
+    DoctorProtectAction,
+)
 
 
 def _check_win_condition(game_state: GameState) -> Optional[GamePhase]:
@@ -36,57 +46,106 @@ def _check_win_condition(game_state: GameState) -> Optional[GamePhase]:
 def _resolve_night_actions(game_state: GameState) -> Tuple[Optional[Player], Optional[Player], List[str]]:
     """
     Processes stored night actions to determine kills, saves, and investigation results.
-    NOTE: This is a placeholder implementation. Full logic depends on Step 8 (Action Service).
-    For now, it assumes mock actions might be stored directly in game_state or returns defaults.
+
+    This function retrieves actions recorded in `game_state.night_actions`, determines
+    the outcome based on Mafia kill attempts and Doctor saves, updates player statuses,
+    and prepares announcements for the Day phase. It also stores Detective investigation
+    results privately on the Detective's player object.
 
     Returns:
         Tuple: (killed_player, saved_player, announcement_strings)
     """
-    # Placeholder logic - replace with actual action retrieval and processing from action_service
     killed_player: Optional[Player] = None
     saved_player: Optional[Player] = None
+    detective_result: Optional[str] = None # Stored privately, not announced publicly
     announcements: List[str] = []
 
-    # --- Placeholder Action Processing ---
-    # In a real implementation (Step 8+), we'd fetch actions:
-    # actions = get_pending_actions(game_state.game_id)
-    # ... process actions ...
+    # Helper to find player by ID
+    def get_player(player_id: UUID) -> Optional[Player]:
+        return next((p for p in game_state.players if p.id == player_id), None)
 
-    # Mock: Randomly decide if someone is killed for testing phase flow
-    living_players = [p for p in game_state.players if p.status == PlayerStatus.ALIVE and p.role != Role.MAFIA] # Mafia can't kill each other
-    # Simulate someone being saved by ensuring they are not a potential target
-    # In a real implementation, this would use the actual doctor_save_id from actions
-    mock_saved_player_id: Optional[UUID] = None
-    doctor = next((p for p in game_state.players if p.role == Role.DOCTOR and p.status == PlayerStatus.ALIVE), None)
-    if doctor: # Simulate doctor saving someone randomly for placeholder
-        save_targets = [p.id for p in game_state.players if p.status == PlayerStatus.ALIVE]
-        if save_targets:
-             mock_saved_player_id = random.choice(save_targets)
+    # Identify actions by type
+    mafia_action: Optional[MafiaKillAction] = None
+    doctor_action: Optional[DoctorProtectAction] = None
+    detective_action: Optional[DetectiveInvestigateAction] = None
 
-    potential_targets = [p for p in living_players if p.id != mock_saved_player_id]
+    for action_key, action_value in game_state.night_actions.items():
+        # Check type based on the action model stored
+        if isinstance(action_value, MafiaKillAction):
+            # Assumes a single Mafia kill action is stored using ActionType.MAFIA_KILL as key
+            mafia_action = action_value
+        elif isinstance(action_value, DoctorProtectAction):
+            doctor_action = action_value
+        elif isinstance(action_value, DetectiveInvestigateAction):
+            detective_action = action_value
 
-    if potential_targets and random.choice([True, False]): # 50% chance of kill
-        killed_player = random.choice(potential_targets)
-        killed_player.status = PlayerStatus.DEAD # Update status directly
-        announcement = f"Night fell, and tragedy struck. {killed_player.name} (ID: {killed_player.id}) was killed. They were a {killed_player.role.value}."
-        announcements.append(announcement)
-        # Also add directly to history for persistence, mirroring the announcement
-        game_state.add_to_history(announcement)
+    # Determine who was saved
+    doctor_save_target_id: Optional[UUID] = None
+    if doctor_action:
+        saved_player = get_player(doctor_action.target_id)
+        if saved_player and saved_player.status == PlayerStatus.ALIVE:
+            doctor_save_target_id = saved_player.id
+            saved_player.is_saved = True # Mark player as saved for this night potentially
+            # Note: saved_player object is updated, but status change depends on Mafia action
+            game_state.add_to_history(f"Doctor chose to protect {saved_player.name}.") # Log internal choice
 
-    # Placeholder for detective result (should be private message via WebSocket in future)
-    # if detective_investigation_id: ...
+    # Determine Mafia Kill outcome
+    if mafia_action:
+        mafia_target = get_player(mafia_action.target_id)
+        if mafia_target and mafia_target.status == PlayerStatus.ALIVE:
+            if mafia_target.id == doctor_save_target_id:
+                # Player was saved!
+                announcement = (f"Night fell, and while danger lurked, "
+                                f"{mafia_target.name} (ID: {mafia_target.id}) survived the attack thanks to protection!")
+                announcements.append(announcement)
+                game_state.add_to_history(announcement)
+                # saved_player is already set above
+            else:
+                # Player was killed
+                killed_player = mafia_target
+                killed_player.status = PlayerStatus.DEAD
+                announcement = (f"Night fell, and tragedy struck. {killed_player.name} (ID: {killed_player.id}) "
+                                f"was killed. They were a {killed_player.role.value}.")
+                announcements.append(announcement)
+                game_state.add_to_history(announcement)
+                # Ensure saved_player is None if the killed player wasn't the one saved
+                if saved_player and saved_player.id != doctor_save_target_id:
+                    saved_player.is_saved = False # Unmark if they weren't the target
+                    saved_player = None # Reset saved_player if it wasn't the target
 
-    if not killed_player:
+        elif mafia_target and mafia_target.status == PlayerStatus.DEAD:
+             # Mafia targeted an already dead player
+             announcement = "The night passed uneventfully. The intended target was already deceased."
+             announcements.append(announcement)
+             game_state.add_to_history(announcement)
+             if saved_player: # Clear save status if target was dead
+                 saved_player.is_saved = False
+                 saved_player = None
+
+    # If no Mafia action occurred (e.g., only one Mafia died night before)
+    if not mafia_action and not killed_player:
         announcement = "The night passed peacefully. No one was killed."
         announcements.append(announcement)
-        # Also add directly to history
         game_state.add_to_history(announcement)
+        if saved_player: # Still note the save even if no attack
+             saved_player.is_saved = True # Keep marked as saved for this night
 
-    # Clear actions after processing (Step 8)
-    # clear_pending_actions(game_state.game_id)
+    # Process Detective Investigation (Store result privately)
+    if detective_action:
+        detective = get_player(detective_action.player_id)
+        investigation_target = get_player(detective_action.target_id)
+        if detective and investigation_target and detective.status == PlayerStatus.ALIVE:
+            target_is_mafia = investigation_target.role == Role.MAFIA
+            result_text = "Mafia" if target_is_mafia else "Innocent"
+            detective.investigation_result = f"Your investigation of {investigation_target.name} revealed they are {result_text}."
+            # History log for debugging/internal tracking - NOT public announcement
+            game_state.add_to_history(f"Detective investigated {investigation_target.name}, result: {result_text}.")
 
-    # Find the actual saved player object if an ID was chosen
-    saved_player = next((p for p in game_state.players if p.id == mock_saved_player_id), None)
+    # Clear actions and save status for the next night
+    game_state.night_actions = {}
+    for p in game_state.players:
+        p.is_saved = False # Reset save status for all players
+        # Keep investigation result until next investigation or game end
 
     return killed_player, saved_player, announcements
 
@@ -117,7 +176,7 @@ def advance_to_day(game_state: GameState, game_id: str) -> GameState:
 
     # 1. Process Night Actions (updates status and adds announcements to history directly)
     killed_player, saved_player, announcements = _resolve_night_actions(game_state)
-    # Announcements are now just strings and already added to history within _resolve_night_actions
+    # Note: Announcements are now strings derived from the logic above.
 
     # 2. Check Win Conditions (updates history and winner status if game over)
     win_condition = _check_win_condition(game_state)

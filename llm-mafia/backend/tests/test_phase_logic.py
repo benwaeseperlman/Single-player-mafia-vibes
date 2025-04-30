@@ -8,9 +8,16 @@ from datetime import datetime
 from app.models.game import GameState, GamePhase
 from app.models.player import Player, PlayerStatus, Role
 from app.models.settings import GameSettings
+from app.models.actions import (
+    ActionType,
+    MafiaKillAction,
+    DetectiveInvestigateAction,
+    DoctorProtectAction,
+)
 
 # Module to test
 from app.services import phase_logic
+from app.services.state_service import save_game_state, delete_game_state
 
 # Helper to create players
 def create_test_players(roles: List[Role]) -> List[Player]:
@@ -96,6 +103,35 @@ def mock_resolve_actions():
     mock_obj.mock_config = mock_config
     yield mock_obj # Yield the mock object directly
     patcher.stop()
+
+@pytest.fixture
+def game_state_night() -> GameState:
+    """Provides a standard game state fixture in the Night phase for action tests."""
+    # Use a standard 7-player setup for these tests
+    players = create_test_players([
+        Role.MAFIA,
+        Role.DOCTOR,
+        Role.DETECTIVE,
+        Role.VILLAGER, # Villager 1
+        Role.VILLAGER, # Villager 2
+        Role.MAFIA,
+        Role.VILLAGER  # Villager 3
+    ])
+    # Ensure specific player names for easier targeting in tests if needed
+    players[3].name = "Villager 1"
+    players[4].name = "Villager 2"
+    players[6].name = "Villager 3"
+    # Ensure the first Mafia is named for clarity
+    players[0].name = "Mafia 1"
+    players[5].name = "Mafia 2"
+    # Ensure detective/doctor are named
+    players[1].name = "Doctor"
+    players[2].name = "Detective"
+
+    state = create_test_game_state(players, phase=GamePhase.NIGHT, day=1)
+    # Clear history for cleaner test logs if desired, but keep creation message
+    state.history = [state.history[0]] 
+    return state
 
 # --- Test Cases ---
 
@@ -424,46 +460,189 @@ def test_check_win_condition_ongoing():
     assert len(game_state.history) == initial_history_len
 
 # Test internal _resolve_night_actions (basic placeholder behavior)
-@patch("app.services.phase_logic.random.choice")
-def test_resolve_night_actions_simulated_kill(mock_random_choice):
-    players = create_test_players([
-        Role.VILLAGER, Role.MAFIA, Role.DOCTOR, Role.DETECTIVE, Role.VILLAGER
-    ])
-    game_state = create_test_game_state(players)
-    villager = players[0]
-    doctor = next(p for p in players if p.role == Role.DOCTOR)
-    initial_history_len = len(game_state.history)
+# THESE TESTS ARE NOW OBSOLETE as we test the actual _resolve_night_actions below
+# @patch("app.services.phase_logic.random.choice")
+# def test_resolve_night_actions_simulated_kill(mock_random_choice):
+#     ...
 
-    # Simulate doctor saving someone else, kill decision = True, target = villager
-    mock_random_choice.side_effect = [players[2].id, True, villager]
+# @patch("app.services.phase_logic.random.choice")
+# def test_resolve_night_actions_no_kill(mock_random_choice):
+#    ...
 
-    killed, saved, announcements = phase_logic._resolve_night_actions(game_state)
+# --- Tests for _resolve_night_actions ---
 
-    assert killed == villager
-    assert saved == players[2] # Check the saved player object is returned
-    assert villager.status == PlayerStatus.DEAD
+def test_resolve_night_actions_mafia_kill_success(game_state_night: GameState):
+    """Test when Mafia successfully kills an unprotected player."""
+    mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    victim = next(p for p in game_state_night.players if p.role == Role.VILLAGER)
+    
+    # Record Mafia action
+    mafia_action = MafiaKillAction(player_id=mafia.id, target_id=victim.id)
+    game_state_night.night_actions[ActionType.MAFIA_KILL] = mafia_action
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    assert killed_player is not None
+    assert killed_player.id == victim.id
+    assert killed_player.status == PlayerStatus.DEAD
+    assert saved_player is None
     assert len(announcements) == 1
-    kill_announcement = f"Night fell, and tragedy struck. {villager.name} (ID: {villager.id}) was killed. They were a {villager.role.value}."
-    assert kill_announcement in announcements[0]
-    new_history = game_state.history[initial_history_len:]
-    assert any(kill_announcement in msg for msg in new_history)
+    assert f"{victim.name}" in announcements[0]
+    assert "was killed" in announcements[0]
+    assert victim.role.value in announcements[0]
+    assert ActionType.MAFIA_KILL not in game_state_night.night_actions # Actions cleared
 
-@patch("app.services.phase_logic.random.choice")
-def test_resolve_night_actions_no_kill(mock_random_choice):
-    players = create_test_players([
-        Role.VILLAGER, Role.MAFIA, Role.DOCTOR, Role.DETECTIVE, Role.VILLAGER
-    ])
-    game_state = create_test_game_state(players)
-    initial_history_len = len(game_state.history)
-
-    mock_random_choice.return_value = False
-
-    killed, saved, announcements = phase_logic._resolve_night_actions(game_state)
-
-    assert killed is None
-    assert saved is None
-    assert all(p.status == PlayerStatus.ALIVE for p in players)
+def test_resolve_night_actions_doctor_save_success(game_state_night: GameState):
+    """Test when Doctor successfully saves the Mafia target."""
+    mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    doctor = next(p for p in game_state_night.players if p.role == Role.DOCTOR)
+    target = next(p for p in game_state_night.players if p.role == Role.VILLAGER)
+    
+    # Record actions
+    mafia_action = MafiaKillAction(player_id=mafia.id, target_id=target.id)
+    doctor_action = DoctorProtectAction(player_id=doctor.id, target_id=target.id)
+    game_state_night.night_actions[ActionType.MAFIA_KILL] = mafia_action
+    game_state_night.night_actions[doctor.id] = doctor_action # Doctor action keyed by player ID
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    assert killed_player is None
+    assert saved_player is not None
+    assert saved_player.id == target.id
+    assert target.status == PlayerStatus.ALIVE # Target survived
     assert len(announcements) == 1
-    no_kill_announcement = "The night passed peacefully. No one was killed."
-    assert no_kill_announcement in announcements[0]
-    assert no_kill_announcement in game_state.history[initial_history_len] 
+    assert f"{target.name}" in announcements[0]
+    assert "survived the attack" in announcements[0]
+    assert doctor.id not in game_state_night.night_actions # Actions cleared
+    assert ActionType.MAFIA_KILL not in game_state_night.night_actions
+
+def test_resolve_night_actions_doctor_saves_non_target(game_state_night: GameState):
+    """Test when Doctor saves someone, but Mafia kills someone else."""
+    mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    doctor = next(p for p in game_state_night.players if p.role == Role.DOCTOR)
+    victim = next(p for p in game_state_night.players if p.role == Role.VILLAGER and p.name == "Villager 1")
+    saved_person = next(p for p in game_state_night.players if p.role == Role.VILLAGER and p.name == "Villager 2")
+
+    # Record actions
+    mafia_action = MafiaKillAction(player_id=mafia.id, target_id=victim.id)
+    doctor_action = DoctorProtectAction(player_id=doctor.id, target_id=saved_person.id)
+    game_state_night.night_actions[ActionType.MAFIA_KILL] = mafia_action
+    game_state_night.night_actions[doctor.id] = doctor_action
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    assert killed_player is not None
+    assert killed_player.id == victim.id
+    assert killed_player.status == PlayerStatus.DEAD
+    assert saved_player is not None # Doctor's save action is still recorded
+    assert saved_player.id == saved_person.id 
+    assert saved_person.status == PlayerStatus.ALIVE # Saved person is alive
+    assert len(announcements) == 1
+    assert f"{victim.name}" in announcements[0]
+    assert "was killed" in announcements[0]
+
+def test_resolve_night_actions_detective_investigation(game_state_night: GameState):
+    """Test Detective investigation result storage."""
+    detective = next(p for p in game_state_night.players if p.role == Role.DETECTIVE)
+    target_mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    target_innocent = next(p for p in game_state_night.players if p.role == Role.VILLAGER)
+
+    # --- Test 1: Investigating Mafia ---    
+    investigate_mafia_action = DetectiveInvestigateAction(player_id=detective.id, target_id=target_mafia.id)
+    game_state_night.night_actions[detective.id] = investigate_mafia_action
+    
+    phase_logic._resolve_night_actions(game_state_night) # Run resolution using module prefix
+    
+    assert detective.investigation_result is not None
+    assert f"{target_mafia.name}" in detective.investigation_result
+    assert "Mafia" in detective.investigation_result
+    assert detective.id not in game_state_night.night_actions # Action cleared
+    game_state_night.night_actions = {}
+
+    # --- Test 2: Investigating Innocent ---    
+    investigate_innocent_action = DetectiveInvestigateAction(player_id=detective.id, target_id=target_innocent.id)
+    game_state_night.night_actions[detective.id] = investigate_innocent_action
+
+    phase_logic._resolve_night_actions(game_state_night) # Run resolution using module prefix
+    
+    assert detective.investigation_result is not None
+    assert f"{target_innocent.name}" in detective.investigation_result
+    assert "Innocent" in detective.investigation_result
+    assert detective.id not in game_state_night.night_actions
+
+def test_resolve_night_actions_no_kill(game_state_night: GameState):
+    """Test scenario with no Mafia kill action."""
+    doctor = next(p for p in game_state_night.players if p.role == Role.DOCTOR)
+    saved_person = next(p for p in game_state_night.players if p.role == Role.VILLAGER)
+    
+    # Only Doctor acts
+    doctor_action = DoctorProtectAction(player_id=doctor.id, target_id=saved_person.id)
+    game_state_night.night_actions[doctor.id] = doctor_action
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    assert killed_player is None
+    assert saved_player is not None
+    assert saved_player.id == saved_person.id
+    assert saved_person.status == PlayerStatus.ALIVE
+    assert len(announcements) == 1
+    assert "passed peacefully" in announcements[0]
+    assert "No one was killed" in announcements[0]
+
+def test_resolve_night_actions_mafia_targets_dead_player(game_state_night: GameState):
+    """Test when Mafia targets an already dead player."""
+    mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    dead_player = Player(id=uuid.uuid4(), name="Already Dead", role=Role.VILLAGER, status=PlayerStatus.DEAD)
+    game_state_night.players.append(dead_player)
+    
+    mafia_action = MafiaKillAction(player_id=mafia.id, target_id=dead_player.id)
+    game_state_night.night_actions[ActionType.MAFIA_KILL] = mafia_action
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    assert killed_player is None
+    assert saved_player is None
+    assert len(announcements) == 1
+    assert "target was already deceased" in announcements[0]
+
+def test_resolve_night_actions_multiple_actions(game_state_night: GameState):
+    """Test resolution with Mafia, Doctor, and Detective actions simultaneously (kill succeeds)."""
+    mafia = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    doctor = next(p for p in game_state_night.players if p.role == Role.DOCTOR)
+    detective = next(p for p in game_state_night.players if p.role == Role.DETECTIVE)
+    victim = next(p for p in game_state_night.players if p.role == Role.VILLAGER and p.name == "Villager 1")
+    saved_person = next(p for p in game_state_night.players if p.role == Role.VILLAGER and p.name == "Villager 2")
+    investigated_person = next(p for p in game_state_night.players if p.role == Role.MAFIA)
+    
+    # Record actions
+    mafia_action = MafiaKillAction(player_id=mafia.id, target_id=victim.id)
+    doctor_action = DoctorProtectAction(player_id=doctor.id, target_id=saved_person.id)
+    detective_action = DetectiveInvestigateAction(player_id=detective.id, target_id=investigated_person.id)
+    game_state_night.night_actions[ActionType.MAFIA_KILL] = mafia_action
+    game_state_night.night_actions[doctor.id] = doctor_action
+    game_state_night.night_actions[detective.id] = detective_action
+    
+    killed_player, saved_player, announcements = phase_logic._resolve_night_actions(game_state_night)
+    
+    # Check kill outcome
+    assert killed_player is not None
+    assert killed_player.id == victim.id
+    assert victim.status == PlayerStatus.DEAD
+    
+    # Check save outcome
+    assert saved_player is not None
+    assert saved_player.id == saved_person.id
+    assert saved_person.status == PlayerStatus.ALIVE
+    
+    # Check announcement
+    assert len(announcements) == 1
+    assert f"{victim.name}" in announcements[0]
+    assert "was killed" in announcements[0]
+    
+    # Check detective result
+    assert detective.investigation_result is not None
+    assert f"{investigated_person.name}" in detective.investigation_result
+    assert ("Mafia" if investigated_person.role == Role.MAFIA else "Innocent") in detective.investigation_result
+    
+    # Check actions cleared
+    assert not game_state_night.night_actions 

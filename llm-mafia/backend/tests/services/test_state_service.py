@@ -34,7 +34,7 @@ DUMMY_GAME_STATE = GameState(
     players=[DUMMY_PLAYER_1, DUMMY_PLAYER_2],
     phase=GamePhase.NIGHT,
     day_number=1,
-    settings=DUMMY_SETTINGS,
+    settings_id=DUMMY_SETTINGS.id, # Corrected: Use settings_id field
     history=[]
 )
 
@@ -72,6 +72,7 @@ def test_save_game_state(setup_test_directory): # Inject the fixture
     # Compare string representations of UUIDs
     assert data['players'][0]['id'] == str(DUMMY_PLAYER_1.id)
     assert data['players'][0]['role'] == DUMMY_PLAYER_1.role.value
+    assert data['players'][0]['status'] == DUMMY_PLAYER_1.status.value # Also check status serialization
 
 @patch('app.services.state_service.DATA_DIR', TEST_DATA_DIR)
 def test_load_game_state_success(setup_test_directory): # Inject the fixture
