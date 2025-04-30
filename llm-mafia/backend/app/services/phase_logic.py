@@ -10,7 +10,9 @@ from app.models.player import Player, PlayerStatus, Role
 # Import state service for persistence (already implemented)
 from .state_service import save_game_state
 # Import action service when available (Step 8)
-# from .action_service import get_pending_actions, clear_pending_actions
+from .action_service import action_service, ActionValidationError
+# Import LLM Service (Step 10)
+from .llm_service import llm_service, LLMServiceError
 
 # Import action models
 from app.models.actions import (
@@ -151,18 +153,43 @@ def _resolve_night_actions(game_state: GameState) -> Tuple[Optional[Player], Opt
 
 
 def advance_to_night(game_state: GameState, game_id: str) -> GameState:
-    """Advances the game state to the Night phase."""
+    """Advances the game state to the Night phase and triggers AI night actions."""
     if game_state.phase == GamePhase.DAY or game_state.phase == GamePhase.VOTING:
         game_state.day_number += 1 # Increment day number when moving from Day/Voting to Night
 
     game_state.phase = GamePhase.NIGHT
     game_state.add_to_history(f"Night falls. Day {game_state.day_number}.")
-    # Reset pending actions/votes for the new phase (replace with service calls later)
+    # Reset pending actions/votes for the new phase
     game_state.night_actions = {}
     game_state.votes = {}
 
+    # Immediately save state after phase change, before AI actions
+    save_game_state(game_id, game_state) 
+
+    # Trigger AI Night Actions (Step 10)
+    for player in game_state.players:
+        if not player.is_human and player.status == PlayerStatus.ALIVE and player.role in [Role.MAFIA, Role.DOCTOR, Role.DETECTIVE]:
+            try:
+                ai_action = llm_service.determine_ai_night_action(player, game_state)
+                if ai_action:
+                    try:
+                        # Use action_service to record the action, which updates game_state.night_actions
+                        action_service.record_night_action(game_state, ai_action)
+                        game_state.add_to_history(f"AI {player.role.value} ({player.id}) has decided their action.") # Log internal decision
+                        # NOTE: Do not save state after every single AI action. Save once after all AI actions or rely on next phase transition save.
+                    except ActionValidationError as ave:
+                        game_state.add_to_history(f"AI {player.role.value} ({player.id}) failed to record action: {ave}")
+                        print(f"Validation Error for AI {player.id}: {ave}") # Log error
+            except LLMServiceError as llme:
+                game_state.add_to_history(f"AI {player.role.value} ({player.id}) failed to determine action due to LLM error: {llme}")
+                print(f"LLM Service Error for AI {player.id}: {llme}") # Log error
+            except Exception as e:
+                game_state.add_to_history(f"Unexpected error determining action for AI {player.role.value} ({player.id}): {e}")
+                print(f"Unexpected Error for AI {player.id}: {e}") # Log error
+
+    # Save state again *after* all potential AI actions are recorded
     save_game_state(game_id, game_state)
-    # Trigger LLM Night Actions (Step 10)
+
     # Trigger WebSocket update (Step 13)
     return game_state
 

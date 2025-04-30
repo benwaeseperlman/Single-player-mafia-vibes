@@ -149,5 +149,29 @@ The `ActionService` provides the core functionality for recording night actions 
 Night action resolution logic is now implemented and tested, correctly handling interactions between Mafia, Doctor, and Detective roles based on actions recorded in the game state.
 *Unit tests written and passed.*
 
+### Step 10: Implement Basic LLM Integration (for AI Night Actions) (2025-04-29 - Replace with actual date)
+
+- [x] Added `openai` dependency to `llm-mafia/backend/requirements.txt`.
+- [x] Updated `llm-mafia/backend/app/core/config.py` to handle provider-specific API keys (`OPENAI_API_KEY`).
+- [x] Created `llm-mafia/backend/app/services/llm_service.py` with `LLMService` class.
+    - [x] Implemented client initialization (currently OpenAI).
+    - [x] Implemented `_generate_prompt` for night actions (Mafia, Doctor, Detective).
+    - [x] Implemented `determine_ai_night_action` using OpenAI `chat.completions` API with JSON mode.
+    - [x] Added basic validation and fallback logic for LLM target selection.
+- [x] Integrated `llm_service.determine_ai_night_action` into `llm-mafia/backend/app/services/phase_logic.py` (`advance_to_night` function).
+    - [x] Loops through active, non-human players with night roles.
+    - [x] Calls `llm_service` to get action.
+    - [x] Calls `action_service.record_night_action` to store the determined action.
+    - [x] Added error handling for LLM service and action validation.
+- [x] Created `llm-mafia/backend/tests/test_llm_service.py` with unit tests.
+    - [x] Mocked OpenAI API calls using `unittest.mock`.
+    - [x] Tested client initialization, prompt generation, successful action determination for each role, error handling (API error, JSON error, missing key), and invalid target fallback.
+- [x] Debugged and fixed issues related to `requirements.txt` format, Pydantic V2 `BaseSettings` import, action model naming (`DoctorProtectAction`), `GameState` model usage (`day_number`), and test logic (UUID string comparison, `APIError` mocking, assertion checks).
+
+Basic LLM integration for AI night actions is implemented and unit tested. AI players with night roles (Mafia, Doctor, Detective) now use the configured LLM (OpenAI) to decide their target, with results recorded in the game state. Tests cover core functionality and error handling using mocks.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 10: Implement Basic LLM Integration (for AI Night Actions) - *Not Started*
+- Step 11: Implement LLM Integration (for AI Day Discussion) - *Not Started*
+- Step 12: Implement LLM Integration (for AI Voting) - *Not Started*
+- Step 13: Implement WebSocket Manager & Basic Communication - *Not Started*
