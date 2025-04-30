@@ -1,4 +1,5 @@
 import random
+import asyncio
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -96,8 +97,10 @@ class GameManager:
 
         try:
             # Use correct relative path for state service assuming it's in the same directory
-            state_service.save_game_state(initial_state.game_id, initial_state)
-            self.active_games[initial_state.game_id] = initial_state
+            # Pass the STRING representation of the game_id to state_service
+            state_service.save_game_state(str(initial_state.game_id), initial_state)
+            # Use string ID for cache key
+            self.active_games[str(initial_state.game_id)] = initial_state
             print(f"Game {initial_state.game_id} created and saved.") # Logging
             return initial_state
         except Exception as e:
@@ -108,67 +111,56 @@ class GameManager:
 
     def get_game(self, game_id_str: str) -> Optional[GameState]:
         """Retrieves game state, checking cache first, then loading from storage."""
-        try:
-            game_uuid = UUID(game_id_str)
-        except ValueError:
-            print(f"Invalid game ID format: {game_id_str}") # Logging
-            return None # Invalid UUID format
+        if game_id_str in self.active_games:
+            print(f"Game {game_id_str} found in cache.") # Logging
+            return self.active_games[game_id_str]
 
-        if game_uuid in self.active_games:
-            print(f"Game {game_uuid} found in cache.") # Logging
-            return self.active_games[game_uuid]
-
-        print(f"Game {game_uuid} not in cache, attempting to load from storage.") # Logging
+        print(f"Game {game_id_str} not in cache, attempting to load from storage.") # Logging
         try:
-            # Assuming load_game_state expects UUID
-            game_state = state_service.load_game_state(game_uuid)
+            # Pass the string ID directly to state_service
+            game_state = state_service.load_game_state(game_id_str)
             if game_state:
-                self.active_games[game_uuid] = game_state
-                print(f"Game {game_uuid} loaded from storage and cached.") # Logging
+                self.active_games[game_id_str] = game_state
+                print(f"Game {game_id_str} loaded from storage and cached.") # Logging
                 return game_state
             else:
-                print(f"Game {game_uuid} not found in storage.") # Logging
+                print(f"Game {game_id_str} not found in storage.") # Logging
                 return None
         except Exception as e:
             # Log the error appropriately
-            print(f"Error loading game state for game {game_uuid}: {e}")
+            print(f"Error loading game state for game {game_id_str}: {e}")
             return None # Return None or raise an exception, depending on desired handling
 
-    def update_game_state(self, game_id_str: str, new_state: GameState) -> bool:
-        """Updates the game state in the cache and persists it to storage."""
-        try:
-            game_uuid = UUID(game_id_str)
-        except ValueError:
-             print(f"Invalid game ID format for update: {game_id_str}") # Logging
-             return False
-
-        if game_uuid != new_state.game_id:
-             print(f"Error: Mismatched game_id {game_uuid} vs {new_state.game_id} in update_game_state") # Logging
-             return False # Or raise ValueError
+    async def update_game_state(self, game_id_str: str, new_state: GameState) -> bool:
+        """Updates the game state in the cache, persists it, and broadcasts the update."""
+        if game_id_str != new_state.game_id:
+            print(f"Error: Mismatched game_id {game_id_str} vs {new_state.game_id} in update_game_state") # Logging
+            return False # Or raise ValueError
 
         try:
-            # Assuming save_game_state expects UUID
-            state_service.save_game_state(game_uuid, new_state)
-            self.active_games[game_uuid] = new_state
-            print(f"Game {game_uuid} updated and saved.") # Logging
+            # Pass string ID to state_service
+            state_service.save_game_state(game_id_str, new_state)
+            self.active_games[game_id_str] = new_state
+            print(f"Game {game_id_str} updated and saved.") # Logging
+
+            # Broadcast the updated state
+            from ..dependencies import get_websocket_manager # Import getter
+            websocket_manager = get_websocket_manager() # Get the instance
+            await websocket_manager.broadcast_to_game(game_id_str, new_state)
+            print(f"Game {game_id_str} update broadcasted.") # Logging
+
             return True
         except Exception as e:
             # Log the error appropriately
-            print(f"Error saving updated game state for game {game_uuid}: {e}")
+            print(f"Error saving/broadcasting updated game state for game {game_id_str}: {e}")
             # Consider cache consistency: should we revert the cache update if save fails?
             return False
 
     def remove_game_from_cache(self, game_id_str: str):
          """Removes a game from the active cache (e.g., when completed or inactive)."""
-         try:
-            game_uuid = UUID(game_id_str)
-         except ValueError:
-             print(f"Invalid game ID format for cache removal: {game_id_str}") # Logging
-             return # Do nothing if ID is invalid
-
-         if game_uuid in self.active_games:
-             del self.active_games[game_uuid]
-             print(f"Game {game_uuid} removed from cache.") # Logging
+         if game_id_str in self.active_games:
+             del self.active_games[game_id_str]
+             print(f"Game {game_id_str} removed from cache.") # Logging
 
 # Optional: Instantiate a global game manager instance if desired
 # game_manager = GameManager() 

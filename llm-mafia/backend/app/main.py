@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import the router
+# Import routers and services
 from app.api import game_endpoints
+from app.api import websocket_endpoints
 
 app = FastAPI(
     title="LLM Mafia Game",
@@ -28,6 +29,9 @@ async def health_check():
 # from app.api import game_endpoints
 # app.include_router(game_endpoints.router, prefix="/api")
 app.include_router(game_endpoints.router, prefix="/api", tags=["Game Management"])
+app.include_router(websocket_endpoints.router, tags=["WebSocket"])
+
+# TODO: Add WebSocket endpoint router
 
 if __name__ == "__main__":
     import uvicorn

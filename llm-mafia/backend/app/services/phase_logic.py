@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from uuid import UUID
 import random
 import logging # Added logging
+import asyncio # Add asyncio import
 
 from app.models.game import GamePhase, GameState
 from app.models.player import Player, PlayerStatus, Role
@@ -9,7 +10,9 @@ from app.models.player import Player, PlayerStatus, Role
 # from app.models.actions import MafiaTarget, DetectiveInvestigation, DoctorProtection, Vote
 
 # Import state service for persistence (already implemented)
-from .state_service import save_game_state
+# from .state_service import save_game_state # No longer directly used here
+# Import the global game manager instance
+from .game_manager import game_manager
 # Import action service when available (Step 8)
 from .action_service import action_service, ActionValidationError
 # Import LLM Service (Step 10)
@@ -157,7 +160,7 @@ def _resolve_night_actions(game_state: GameState) -> Tuple[Optional[Player], Opt
     return killed_player, saved_player, announcements
 
 
-def advance_to_night(game_state: GameState, game_id: str) -> GameState:
+async def advance_to_night(game_state: GameState, game_id: str) -> GameState:
     """Advances the game state to the Night phase and triggers AI night actions."""
     if game_state.phase == GamePhase.DAY or game_state.phase == GamePhase.VOTING:
         game_state.day_number += 1 # Increment day number when moving from Day/Voting to Night
@@ -169,7 +172,8 @@ def advance_to_night(game_state: GameState, game_id: str) -> GameState:
     game_state.votes = {}
 
     # Immediately save state after phase change, before AI actions
-    save_game_state(game_id, game_state) 
+    # save_game_state(game_id, game_state)
+    await game_manager.update_game_state(game_id, game_state) # Save and broadcast
 
     # Trigger AI Night Actions (Step 10)
     for player in game_state.players:
@@ -196,13 +200,14 @@ def advance_to_night(game_state: GameState, game_id: str) -> GameState:
                 print(f"Unexpected Error for AI {player.id}: {e}")
 
     # Save state again *after* all potential AI actions are recorded
-    save_game_state(game_id, game_state)
+    # save_game_state(game_id, game_state)
+    await game_manager.update_game_state(game_id, game_state) # Save and broadcast final night state
 
-    # Trigger WebSocket update (Step 13)
+    # Trigger WebSocket update (Step 13) - Handled by update_game_state
     return game_state
 
 
-def advance_to_day(game_state: GameState, game_id: str) -> GameState:
+async def advance_to_day(game_state: GameState, game_id: str) -> GameState:
     """
     Processes night actions, updates status, checks win conditions, and advances to Day phase.
     """
@@ -217,14 +222,16 @@ def advance_to_day(game_state: GameState, game_id: str) -> GameState:
     win_condition = _check_win_condition(game_state)
     if win_condition:
         game_state.phase = win_condition
-        save_game_state(game_id, game_state)
-        # Trigger WebSocket update (Step 13)
+        # save_game_state(game_id, game_state)
+        await game_manager.update_game_state(game_id, game_state) # Save and broadcast game over state
+        # Trigger WebSocket update (Step 13) - Handled by update_game_state
         return game_state
 
     # 3. Update Phase
     game_state.phase = GamePhase.DAY
     game_state.add_to_history(f"Day {game_state.day_number}. Discuss and decide who to lynch.")
-    save_game_state(game_id, game_state)
+    # save_game_state(game_id, game_state)
+    await game_manager.update_game_state(game_id, game_state) # Save and broadcast start of day state
 
     # 4. Trigger AI Discussion (Step 11)
     ai_messages: List[ChatMessage] = []
@@ -249,124 +256,122 @@ def advance_to_day(game_state: GameState, game_id: str) -> GameState:
     # Consider randomizing order later if needed
     if ai_messages:
         game_state.chat_history.extend(ai_messages)
-        # Maybe save state again after adding messages?
-        save_game_state(game_id, game_state) 
-        
-    # 5. Trigger WebSocket update (Step 13) with phase change and potentially announcements
+        # Save and broadcast state *after* AI messages are added
+        await game_manager.update_game_state(game_id, game_state)
 
+    # Trigger WebSocket update (Step 13) - Handled by update_game_state calls above
     return game_state
 
 
-def advance_to_voting(game_state: GameState, game_id: str) -> GameState:
-    """Advances the game state to the Voting phase and triggers AI voting."""
+async def advance_to_voting(game_state: GameState, game_id: str) -> GameState:
+    """
+    Advances the game state to the Voting phase.
+    """
     if game_state.phase != GamePhase.DAY:
         return game_state
 
     game_state.phase = GamePhase.VOTING
-    game_state.add_to_history("Voting has begun! Choose who to lynch.")
-    # Clear previous votes
-    game_state.votes = {}
-    
-    # Immediately save state after phase change, before AI actions
-    save_game_state(game_id, game_state) 
+    game_state.votes = {} # Clear previous votes
+    game_state.add_to_history("Voting phase begins. Please cast your votes.")
+    # save_game_state(game_id, game_state)
+    await game_manager.update_game_state(game_id, game_state) # Save and broadcast voting phase start
 
     # Trigger AI Voting (Step 12)
+    ai_votes: Dict[UUID, UUID] = {}
     for player in game_state.players:
-         if not player.is_human and player.status == PlayerStatus.ALIVE:
+        if not player.is_human and player.status == PlayerStatus.ALIVE:
             try:
-                voted_player_id = llm_service.determine_ai_vote(player, game_state)
-                if voted_player_id:
-                    # Directly record the vote in the game state
-                    # Validation of voted_player_id happens within llm_service
-                    game_state.votes[player.id] = voted_player_id
-                    game_state.add_to_history(f"AI {player.name} ({player.id}) has cast their vote.") # Log internal action
+                target_id = llm_service.determine_ai_vote(player, game_state)
+                if target_id:
+                    ai_votes[player.id] = target_id # Use UUID for player ID key
+                    # Optional: Log AI vote choice internally
+                    game_state.add_to_history(f"AI {player.name} ({player.id}) has decided their vote.")
                 else:
-                     game_state.add_to_history(f"AI {player.name} ({player.id}) could not determine a vote.")
-                     # logger.warning(f"AI Player {player.id} did not return a vote.")
-                     print(f"AI Player {player.id} did not return a vote.")
-
+                    game_state.add_to_history(f"AI {player.name} ({player.id}) abstained or failed to vote.")
             except LLMServiceError as llme:
-                game_state.add_to_history(f"AI {player.name} ({player.id}) failed to vote due to LLM error: {llme}")
-                # logger.error(f"LLM Service Error for AI {player.id} vote: {llme}")
-                print(f"LLM Service Error for AI {player.id} vote: {llme}")
+                game_state.add_to_history(f"AI {player.name} ({player.id}) failed to determine vote due to LLM error: {llme}")
+                # logger.error(f"LLM Service Error for AI {player.id} Vote: {llme}") # Log error
+                print(f"LLM Service Error for AI {player.id} Vote: {llme}")
             except Exception as e:
                 game_state.add_to_history(f"Unexpected error determining vote for AI {player.name} ({player.id}): {e}")
-                # logger.exception(f"Unexpected Error for AI {player.id} vote")
-                print(f"Unexpected Error for AI {player.id} vote: {e}")
+                # logger.exception(f"Unexpected Error for AI {player.id} Vote") # Log error with stack trace
+                print(f"Unexpected Error for AI {player.id} Vote: {e}")
 
-    # Save state again *after* all potential AI votes are recorded
-    save_game_state(game_id, game_state)
+    # Add AI votes to the game state
+    if ai_votes:
+        game_state.votes.update(ai_votes)
+        # Save and broadcast state *after* AI votes are added
+        await game_manager.update_game_state(game_id, game_state)
 
-    # Trigger WebSocket update (Step 13)
+    # Trigger WebSocket update (Step 13) - Handled by update_game_state calls
     return game_state
 
 
-def process_voting_and_advance(game_state: GameState, game_id: str, votes: Dict[UUID, UUID]) -> GameState:
-    """Processes votes, handles lynching/ties, checks win conditions, and advances phase.
-    
-    Accepts votes dictionary directly for now. In the future, this might just use game_state.votes.
-    For now, it assumes the input `votes` combines human and AI votes.
-    """
+async def process_voting_and_advance(game_state: GameState, game_id: str, votes: Dict[UUID, UUID]) -> GameState:
+    """Processes votes, handles lynching, checks win conditions, and advances phase."""
     if game_state.phase != GamePhase.VOTING:
-        return game_state # Or raise error
-    
-    # Use the votes passed in (or merge with game_state.votes if needed later)
-    current_votes = votes
-    # TODO: Refine how votes are collected (e.g., maybe game_state.votes is the single source)
-    game_state.votes = current_votes # Overwrite state votes with the processed ones for history/consistency
+        return game_state
 
-    if not current_votes:
-        game_state.add_to_history("No votes were cast. Proceeding to night.")
-        return advance_to_night(game_state, game_id)
+    # Update game state with the received votes (primarily human vote if applicable, AI votes already in)
+    # This assumes 'votes' dict might contain the human vote
+    # If human vote comes via a separate mechanism, adjust logic here
+    game_state.votes.update(votes) # Merge in any new votes (e.g., human vote)
+    # Save state with all votes recorded *before* processing
+    await game_manager.update_game_state(game_id, game_state)
 
-    # Tally votes
-    vote_counts = {}
-    for voter_id, target_id in current_votes.items():
-        vote_counts[target_id] = vote_counts.get(target_id, 0) + 1
+    # Tally Votes
+    vote_counts: Dict[UUID, int] = {}
+    valid_voters = {p.id for p in game_state.players if p.status == PlayerStatus.ALIVE}
+    living_player_ids = {p.id for p in game_state.players if p.status == PlayerStatus.ALIVE}
 
-    # Determine highest vote count
-    max_votes = 0
-    lynched_player_id = None
-    tie = False
+    for voter_id, target_id in game_state.votes.items():
+        # Ensure voter is alive and target is valid (and alive)
+        if voter_id in valid_voters and target_id in living_player_ids:
+            vote_counts[target_id] = vote_counts.get(target_id, 0) + 1
+            # Log individual votes for history/transparency
+            voter_name = next((p.name for p in game_state.players if p.id == voter_id), "Unknown")
+            target_name = next((p.name for p in game_state.players if p.id == target_id), "Unknown")
+            game_state.add_to_history(f"{voter_name} voted for {target_name}.")
+        elif voter_id in valid_voters:
+             voter_name = next((p.name for p in game_state.players if p.id == voter_id), "Unknown")
+             game_state.add_to_history(f"{voter_name}'s vote for {target_id} was invalid (target not alive or invalid ID). ")
+
+    # Determine Lynched Player
+    lynched_player: Optional[Player] = None
     if vote_counts:
-        sorted_votes = sorted(vote_counts.items(), key=lambda item: item[1], reverse=True)
-        max_votes = sorted_votes[0][1]
-        top_voted_ids = [pid for pid, count in sorted_votes if count == max_votes]
-        
-        if len(top_voted_ids) == 1:
-            lynched_player_id = top_voted_ids[0]
-            tie = False
-        else:
-            tie = True
+        max_votes = max(vote_counts.values())
+        potential_lynches = [pid for pid, count in vote_counts.items() if count == max_votes]
 
-    # Handle outcome
-    if tie:
-        game_state.add_to_history(f"Voting resulted in a tie with {max_votes} votes each. No one is lynched.")
-        # Optionally implement tie-breaking logic here
-        # Advance to Night
-        return advance_to_night(game_state, game_id)
-    elif lynched_player_id:
-        lynched_player = next((p for p in game_state.players if p.id == lynched_player_id), None)
-        if lynched_player:
-            lynched_player.status = PlayerStatus.DEAD
-            game_state.add_to_history(f"{lynched_player.name} (ID: {lynched_player.id}) has been lynched with {max_votes} votes. They were a {lynched_player.role.value}.")
-            # Check win condition after lynching
-            win_condition = _check_win_condition(game_state)
-            if win_condition:
-                game_state.phase = win_condition
-                save_game_state(game_id, game_state)
-                return game_state
+        if len(potential_lynches) == 1:
+            # Clear winner
+            lynched_player_id = potential_lynches[0]
+            lynched_player = next((p for p in game_state.players if p.id == lynched_player_id), None)
+            if lynched_player:
+                lynched_player.status = PlayerStatus.DEAD
+                game_state.add_to_history(
+                    f"The town has voted. {lynched_player.name} (ID: {lynched_player.id}) has been lynched. "
+                    f"They were a {lynched_player.role.value}."
+                )
             else:
-                # Advance to Night
-                return advance_to_night(game_state, game_id)
+                # Should not happen if IDs are consistent
+                game_state.add_to_history("Error: Lynched player ID not found.")
         else:
-             game_state.add_to_history(f"Error: Lynched player ID {lynched_player_id} not found. Proceeding to night.")
-             return advance_to_night(game_state, game_id)
+            # Tie
+            tied_names = [next((p.name for p in game_state.players if p.id == pid), "Unknown") for pid in potential_lynches]
+            game_state.add_to_history(f"Voting resulted in a tie between: {', '.join(tied_names)}. No one is lynched.")
     else:
-         # Should not happen if votes were cast, but handle defensively
-         game_state.add_to_history("Voting concluded with no one lynched. Proceeding to night.")
-         return advance_to_night(game_state, game_id)
+        game_state.add_to_history("No valid votes were cast. No one is lynched.")
 
-    # Fallback save just in case (though transitions should handle it)
-    save_game_state(game_id, game_state)
-    return game_state 
+    # Check Win Conditions again after lynching
+    win_condition = _check_win_condition(game_state)
+    if win_condition:
+        game_state.phase = win_condition
+        await game_manager.update_game_state(game_id, game_state) # Save and broadcast final state
+        return game_state
+
+    # Advance to the next phase (Night)
+    # The advance_to_night function handles setting the phase, saving, and broadcasting
+    # No need to call update_game_state here, advance_to_night will do it.
+    # return advance_to_night(game_state, game_id)
+    # Call the async version
+    return await advance_to_night(game_state, game_id) 
