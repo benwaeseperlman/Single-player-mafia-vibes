@@ -113,5 +113,17 @@ Initial API endpoints for basic game management (create, get, list) are implemen
 Core phase transition logic (Night -> Day -> Voting -> Night) is implemented in `phase_logic.py`. Includes win condition checking and placeholder night action/voting resolution. Comprehensive unit tests ensure logic correctness.
 *Unit tests written and passed.*
 
+### Step 8: Implement Role Action Service (2025-04-28 - Replace with actual date)
+
+- [x] Created `llm-mafia/backend/app/services/action_service.py`
+- [x] Implemented `ActionService` class.
+- [x] Implemented `record_night_action` method with validation (phase, status, role, duplicate, self-kill).
+- [x] Utilized existing action models (`MafiaKillAction`, etc.) and `GameState.night_actions`.
+- [x] Added `ActionValidationError` custom exception.
+- [x] Created unit tests (`llm-mafia/backend/tests/test_action_service.py`) covering success cases and validation errors.
+
+The `ActionService` provides the core functionality for recording night actions (Mafia Kill, Detective Investigate, Doctor Protect). It includes validation logic to ensure actions are permissible according to game rules and player state. Unit tests verify the service's behavior.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 8: Implement Role Action Logic (`llm-mafia/backend/app/services/action_service.py`) - *Not Started*
+- Step 9: Implement Action Resolution Logic (in `phase_logic.py` or `action_service.py`) - *Not Started*
