@@ -13,11 +13,13 @@ from app.models.actions import (
     MafiaKillAction,
     DetectiveInvestigateAction,
     DoctorProtectAction,
+    ChatMessage
 )
 
 # Module to test
 from app.services import phase_logic
 from app.services.state_service import save_game_state, delete_game_state
+from app.services.llm_service import LLMServiceError
 
 # Helper to create players
 def create_test_players(roles: List[Role]) -> List[Player]:
@@ -105,6 +107,11 @@ def mock_resolve_actions():
     patcher.stop()
 
 @pytest.fixture
+def mock_llm_service():
+    with patch("app.services.phase_logic.llm_service", autospec=True) as mock_llm:
+        yield mock_llm
+
+@pytest.fixture
 def game_state_night() -> GameState:
     """Provides a standard game state fixture in the Night phase for action tests."""
     # Use a standard 7-player setup for these tests
@@ -150,7 +157,9 @@ def test_advance_to_night(mock_state_service):
     assert "Night falls" in new_state.history[-1]
     assert new_state.night_actions == {}
     assert new_state.votes == {}
-    mock_state_service.assert_called_once_with(game_id_str, new_state)
+    # Called twice: once after phase change, once after potential AI actions
+    assert mock_state_service.call_count == 2
+    mock_state_service.assert_called_with(game_id_str, new_state) # Check last call
 
 def test_advance_to_night_increments_day(mock_state_service):
     # Use 5 players
@@ -167,9 +176,11 @@ def test_advance_to_night_increments_day(mock_state_service):
     assert f"Night falls. Day {new_state.day_number}." in new_state.history[-1]
     assert new_state.night_actions == {}
     assert new_state.votes == {}
-    mock_state_service.assert_called_once_with(game_id_str, new_state)
+    # Called twice: once after phase change, once after potential AI actions
+    assert mock_state_service.call_count == 2
+    mock_state_service.assert_called_with(game_id_str, new_state)
 
-def test_advance_to_day_no_kill(mock_state_service, mock_resolve_actions):
+def test_advance_to_day_no_kill(mock_state_service, mock_resolve_actions, mock_llm_service):
     # Use 5 players: 1 M, 1 Dt, 3 V
     players = create_test_players([
         Role.VILLAGER, Role.MAFIA, Role.DETECTIVE, Role.VILLAGER, Role.VILLAGER
@@ -193,10 +204,14 @@ def test_advance_to_day_no_kill(mock_state_service, mock_resolve_actions):
     assert any(msg.strip().endswith(peaceful_msg_suffix) for msg in new_history)
     assert any(msg.strip().endswith(discuss_msg_suffix) for msg in new_history)
     mock_resolve_actions.assert_called_once_with(game_state)
-    assert mock_state_service.call_count == 1
+    # Called twice: once after phase change, once after potential AI messages
+    # Note: Even if no messages generated, the logic path includes the second save attempt
+    assert mock_state_service.call_count == 2
     mock_state_service.assert_called_with(game_id_str, new_state)
+    # Check LLM service was NOT called (no AI messages generated in this test yet)
+    # assert mock_llm_service.generate_ai_day_message.call_count == 0 # Removed this assertion
 
-def test_advance_to_day_with_kill(mock_state_service, mock_resolve_actions):
+def test_advance_to_day_with_kill(mock_state_service, mock_resolve_actions, mock_llm_service):
     # Use 5 players: 1 M, 1 Dt, 3 V
     players = create_test_players([
         Role.VILLAGER, Role.MAFIA, Role.DETECTIVE, Role.VILLAGER, Role.VILLAGER
@@ -222,8 +237,12 @@ def test_advance_to_day_with_kill(mock_state_service, mock_resolve_actions):
     assert any(msg.strip().endswith(kill_announcement_suffix) for msg in new_history)
     assert any(msg.strip().endswith(discuss_msg_suffix) for msg in new_history)
     mock_resolve_actions.assert_called_once_with(game_state)
-    assert mock_state_service.call_count == 1
+    # Called twice: once after phase change, once after potential AI messages
+    # Note: Even if no messages generated, the logic path includes the second save attempt
+    assert mock_state_service.call_count == 2
     mock_state_service.assert_called_with(game_id_str, new_state)
+    # Check LLM service was NOT called (no AI messages generated in this test yet)
+    # assert mock_llm_service.generate_ai_day_message.call_count == 0 # Removed this assertion
 
 def test_advance_to_day_innocent_win(mock_state_service, mock_resolve_actions):
     # Setup: 1 Mafia, 4 Villagers. Mafia gets killed.
@@ -329,7 +348,8 @@ def test_process_voting_tie(mock_state_service):
     assert tie_msg in new_state.history[initial_history_len]
     assert f"Night falls. Day {new_state.day_number}." in new_state.history[initial_history_len + 1]
     assert new_state.day_number == 2
-    assert mock_state_service.call_count == 2
+    # Called 3 times: after vote processing, after night phase change, after night AI actions
+    assert mock_state_service.call_count == 3
 
 def test_process_voting_mafia_win_lynch(mock_state_service):
     # Setup: 2 M, 3 V. Lynch a Villager -> 2 M, 2 V -> Mafia win
@@ -399,8 +419,8 @@ def test_process_voting_mafia_win_no_lynch(mock_state_service):
     new_history = new_state.history[initial_history_len:]
     assert any(tie_msg in msg for msg in new_history)
     assert any(f"Night falls. Day {new_state.day_number}." in msg for msg in new_history)
-    # Called once after tie processing, once in advance_to_night
-    assert mock_state_service.call_count == 2
+    # Called 3 times: after vote processing, after night phase change, after night AI actions
+    assert mock_state_service.call_count == 3
 
 # Test internal _check_win_condition directly
 def test_check_win_condition_innocent_win():

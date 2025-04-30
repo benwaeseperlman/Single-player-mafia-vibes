@@ -135,4 +135,7 @@ class ActionService:
 #     # - Update player statuses (killed, etc.)
 #     # - Set investigation results
 #     # - Clear night_actions for next night
-#     pass 
+#     pass
+
+# Global instance (similar pattern to llm_service)
+action_service = ActionService() 

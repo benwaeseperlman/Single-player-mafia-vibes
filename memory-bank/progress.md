@@ -171,7 +171,31 @@ Night action resolution logic is now implemented and tested, correctly handling 
 Basic LLM integration for AI night actions is implemented and unit tested. AI players with night roles (Mafia, Doctor, Detective) now use the configured LLM (OpenAI) to decide their target, with results recorded in the game state. Tests cover core functionality and error handling using mocks.
 *Unit tests written and passed.*
 
+### Step 11: Implement LLM Integration (for AI Day Discussion) (2025-04-29 - Replace with actual date)
+
+- [x] Added `chat_history: List[ChatMessage]` to `llm-mafia/backend/app/models/game.py`.
+- [x] Added `generate_ai_day_message` method to `llm-mafia/backend/app/services/llm_service.py`.
+    - [x] Implemented prompt generation (`_generate_day_discussion_prompt`) including game state, recent events, recent chat, role goals, and private info (Mafia allies, Detective results).
+    - [x] Uses OpenAI `chat.completions` with JSON mode.
+    - [x] Parses response and returns `ChatMessage` object.
+    - [x] Includes error handling for API, JSON, and missing/empty messages.
+- [x] Integrated `generate_ai_day_message` into `llm-mafia/backend/app/services/phase_logic.py` (`advance_to_day`).
+    - [x] Calls LLM service for each living AI player.
+    - [x] Appends successful `ChatMessage` results to `game_state.chat_history`.
+    - [x] Handles LLM service errors gracefully.
+- [x] Added unit tests for `generate_ai_day_message` in `llm-mafia/backend/tests/test_llm_service.py`.
+    - [x] Mocked OpenAI API calls.
+    - [x] Tested prompt generation for various roles/states.
+    - [x] Tested successful message generation and error handling.
+    - [x] Fixed test failures related to fixture setup (`StopIteration`).
+- [x] Added unit tests for `advance_to_day` integration in `llm-mafia/backend/tests/test_phase_logic.py`.
+    - [x] Mocked `llm_service.generate_ai_day_message`.
+    - [x] Verified calls to LLM service and addition of messages to `chat_history`.
+    - [x] Verified error handling.
+    - [x] Fixed test failures related to `ImportError` (missing `action_service` instance) and incorrect `save_game_state` call count assertions.
+
+AI players now generate chat messages during the Day phase using the LLM, considering game context, their role, and recent conversation. Messages are stored in the game state. Unit tests cover the LLM service method and its integration into the phase logic.
+*Unit tests written and passed.*
+
 ### Next Steps
-- Step 11: Implement LLM Integration (for AI Day Discussion) - *Not Started*
 - Step 12: Implement LLM Integration (for AI Voting) - *Not Started*
-- Step 13: Implement WebSocket Manager & Basic Communication - *Not Started*

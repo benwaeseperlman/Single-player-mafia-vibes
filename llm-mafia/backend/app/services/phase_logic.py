@@ -21,6 +21,7 @@ from app.models.actions import (
     MafiaKillAction,
     DetectiveInvestigateAction,
     DoctorProtectAction,
+    ChatMessage
 )
 
 
@@ -219,6 +220,29 @@ def advance_to_day(game_state: GameState, game_id: str) -> GameState:
     save_game_state(game_id, game_state)
 
     # 4. Trigger AI Discussion (Step 11)
+    ai_messages: List[ChatMessage] = []
+    for player in game_state.players:
+        if not player.is_human and player.status == PlayerStatus.ALIVE:
+            try:
+                ai_message = llm_service.generate_ai_day_message(player, game_state)
+                if ai_message:
+                    ai_messages.append(ai_message)
+                    # Optionally add to history immediately, or just collect
+                    # game_state.add_to_history(f"AI {player.name} ({player.id}) says: {ai_message.message}") 
+            except LLMServiceError as llme:
+                game_state.add_to_history(f"AI {player.name} ({player.id}) failed to generate message due to LLM error: {llme}")
+                print(f"LLM Service Error for AI {player.id} Day Msg: {llme}") # Log error
+            except Exception as e:
+                game_state.add_to_history(f"Unexpected error generating message for AI {player.name} ({player.id}): {e}")
+                print(f"Unexpected Error for AI {player.id} Day Msg: {e}") # Log error
+                
+    # Add all generated AI messages to chat history
+    # Consider randomizing order later if needed
+    if ai_messages:
+        game_state.chat_history.extend(ai_messages)
+        # Maybe save state again after adding messages?
+        save_game_state(game_id, game_state) 
+        
     # 5. Trigger WebSocket update (Step 13) with phase change and potentially announcements
 
     return game_state

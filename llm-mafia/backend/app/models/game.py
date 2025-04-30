@@ -5,6 +5,7 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime
 
 from .player import Player
+from .actions import ChatMessage
 
 
 class GamePhase(str, Enum):
@@ -26,8 +27,9 @@ class GameState(BaseModel):
     # References to other models that will be defined later
     settings_id: Optional[UUID] = None  # Reference to GameSettings
     
-    # History of game events
+    # History of game events and chat
     history: List[str] = []
+    chat_history: List[ChatMessage] = []
     
     # Track night actions and votes
     night_actions: Dict[UUID, Any] = {}  # Player ID -> Action
@@ -55,6 +57,7 @@ class GameState(BaseModel):
             "day_number": self.day_number,
             "settings_id": str(self.settings_id) if self.settings_id else None,
             "history": self.history,
+            "chat_history": [chat.model_dump() for chat in self.chat_history],
             "night_actions": {str(k): v for k, v in self.night_actions.items()},
             "votes": {str(k): str(v) for k, v in self.votes.items()},
             "created_at": self.created_at.isoformat(),
@@ -71,6 +74,7 @@ class GameState(BaseModel):
                 "day_number": 0,
                 "settings_id": "123e4567-e89b-12d3-a456-426614174001",
                 "history": ["Game created"],
+                "chat_history": [],
                 "night_actions": {},
                 "votes": {},
                 "created_at": "2025-04-27T12:00:00",
