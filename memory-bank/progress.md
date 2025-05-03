@@ -289,6 +289,20 @@ API endpoints for human players to submit night actions, day messages, and votes
 The basic frontend structure is set up using Vite and React. Core dependencies (axios) and testing libraries (Vitest, RTL) are installed. Default boilerplate is removed, and a basic test confirms the setup. Note: Tests required manual execution in a terminal with Node v18+ due to tool environment inconsistencies.
 *Unit tests written and passed (manual execution required).*
 
+### Step 16: Implement Core UI Components (Current Date - replace with actual date)
+
+- [x] Created basic functional component `GameStatus.jsx` in `frontend/src/components/`.
+- [x] Created basic functional component `PlayerList.jsx` in `frontend/src/components/`.
+- [x] Created basic functional component `ChatDisplay.jsx` in `frontend/src/components/`.
+- [x] Created basic functional component `ActionInput.jsx` in `frontend/src/components/`.
+- [x] Created basic functional component `MessageInput.jsx` in `frontend/src/components/`.
+- [x] Updated `App.jsx` to import and render these components with placeholder data and handlers.
+- [x] Created basic render tests for each component (`GameStatus.test.jsx`, `PlayerList.test.jsx`, `ChatDisplay.test.jsx`, `ActionInput.test.jsx`, `MessageInput.test.jsx`).
+
+Core UI components for displaying game state, players, chat, and handling basic inputs are created as functional React components. They are integrated into the main `App.jsx` with placeholder data. Basic unit tests ensure components render correctly.
+*Unit tests written.* // Tests need validation
+
 ### Next Steps
 
-- Step 16: Implement Core UI Components - 
+- Step 17: Implement WebSocket Connection and State Synchronization
+- Validate Step 16 unit tests. 
