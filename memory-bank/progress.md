@@ -248,7 +248,31 @@ AI players now use the LLM to determine their vote during the Voting phase based
 WebSocket support added for real-time game state updates. `WebSocketManager` handles connections, `game_manager` and `phase_logic` now broadcast changes via the manager after state modifications. Tests updated for async and WebSocket integration.
 *Unit tests written and mostly passed (one known failure in `test_game_manager`).*
 
-### Step 14: Frontend Basic Setup (React)
+**Note for Next Developer:** The original Step 14 from `implementation-plan.md` (implementing API endpoints for human player actions) was accidentally skipped in previous updates to this progress file. This step has been re-inserted below as the correct next step before starting frontend work. Please implement Step 14 next.
+
+### Step 14: Implement Player Action API Endpoints (Not Started - Replace with actual date)
+
+- [ ] Implement `POST /api/game/{game_id}/action` endpoint in `llm-mafia/backend/app/api/game_endpoints.py`:
+    - Takes player ID and action details (e.g., target ID for Mafia/Doctor/Detective).
+    - Validates the action based on game phase, player role, and status.
+    - Calls `action_service.record_night_action`.
+    - Handles potential `ActionValidationError` and returns appropriate HTTP status codes (e.g., 200, 400, 403, 404).
+- [ ] Implement `POST /api/game/{game_id}/message` endpoint in `llm-mafia/backend/app/api/game_endpoints.py`:
+    - Takes player ID and message content.
+    - Validates if it's the Day phase.
+    - Creates a `ChatMessage` object.
+    - Appends the message to `game_state.chat_history`.
+    - Calls `game_manager.update_game_state` (which will trigger WebSocket broadcast).
+    - Returns appropriate HTTP status codes.
+- [ ] Implement `POST /api/game/{game_id}/vote` endpoint in `llm-mafia/backend/app/api/game_endpoints.py`:
+    - Takes voter player ID and target player ID.
+    - Validates if it's the Voting phase and the players are valid.
+    - Records the vote in `game_state.votes` (e.g., `game_state.votes[voter_id] = target_id`).
+    - Calls `game_manager.update_game_state`.
+    - Returns appropriate HTTP status codes.
+- [ ] Add unit tests for these new endpoints in `llm-mafia/backend/tests/test_game_endpoints.py`.
+
+### Step 15: Frontend Basic Setup (React) (Not Started - Replace with actual date)
 
 - [ ] Create `frontend/` directory using `create-react-app` or similar tool.
 - [ ] Set up basic folder structure (components, services, contexts).
@@ -257,4 +281,5 @@ WebSocket support added for real-time game state updates. `WebSocketManager` han
 
 ### Next Steps
 
-- Step 14: Frontend Basic Setup (React) - *Not Started*
+- Step 14: Implement Player Action API Endpoints - *Not Started*
+- Step 15: Frontend Basic Setup (React) - *Not Started*
