@@ -56,13 +56,22 @@ The application follows a client-server architecture:
 14. `app/api/game_endpoints.py` - Implemented (Basic create/get/list endpoints)
 15. `app/api/websocket_manager.py` - *Not Started*
 
-### Frontend Structure (Planned)
+### Frontend Structure (Planned Initial Setup)
 
 - `frontend/src/` - Source code
-  - `components/` - React components
-  - `hooks/` - Custom React hooks
-  - `services/` - API and WebSocket interaction
-  - `styles/` - CSS/styling files
+  - `components/` - React components (Directory created)
+  - `hooks/` - Custom React hooks (Directory created)
+  - `services/` - API and WebSocket interaction (Directory created)
+  - `styles/` - CSS/styling files (To be added as needed)
+  - `assets/` - Static assets (Directory created, currently empty)
+  - `App.jsx` - Main application component (Cleaned placeholder)
+  - `main.jsx` - Entry point (Cleaned)
+  - `setupTests.js` - Vitest setup file (Created)
+  - `App.test.jsx` - Initial test file for App component (Created)
+- `frontend/vite.config.js` - Vite configuration (Includes Vitest setup)
+- `frontend/package.json` - Project dependencies (Includes React, axios, Vitest, RTL)
+- `frontend/index.html` - HTML entry point
+- `frontend/public/` - Static assets served directly
 
 ## Communication Flow
 

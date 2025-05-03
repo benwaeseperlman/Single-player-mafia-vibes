@@ -275,14 +275,20 @@ WebSocket support added for real-time game state updates. `WebSocketManager` han
 API endpoints for human players to submit night actions, day messages, and votes are implemented and unit tested. Includes validation for phase, player status, and role where applicable. Uses `game_manager.update_game_state` for messages and votes to trigger broadcasts.
 *Unit tests written and passed.*
 
-### Step 15: Frontend Basic Setup (React) (Not Started - Replace with actual date)
+### Step 15: Frontend Basic Setup (React) (2025-05-03 - Replace with actual date)
 
-- [ ] Create `frontend/` directory using `create-react-app` or similar tool.
-- [ ] Set up basic folder structure (components, services, contexts).
-- [ ] Implement initial components (e.g., `App.js`, `GameLobby.js`, `GameScreen.js`).
-- [ ] Configure routing if needed.
+- [x] Verified React project was initialized using Vite in `frontend/`.
+- [x] Installed `axios` dependency.
+- [x] Cleaned up default Vite template files (`App.jsx`, `main.jsx`, removed `index.css` import, emptied `assets`).
+- [x] Verified basic component structure exists (`frontend/src/components/`, `frontend/src/hooks/`, `frontend/src/services/`).
+- [x] Installed testing dependencies (`vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`).
+- [x] Configured Vitest (`vite.config.js`, `src/setupTests.js`).
+- [x] Created initial basic test file (`src/App.test.jsx`).
+- [x] Added `test` script to `package.json`.
+
+The basic frontend structure is set up using Vite and React. Core dependencies (axios) and testing libraries (Vitest, RTL) are installed. Default boilerplate is removed, and a basic test confirms the setup. Note: Tests required manual execution in a terminal with Node v18+ due to tool environment inconsistencies.
+*Unit tests written and passed (manual execution required).*
 
 ### Next Steps
 
-- Step 14: Implement Player Action API Endpoints - *Not Started*
-- Step 15: Frontend Basic Setup (React) - *Not Started*
+- Step 16: Implement Core UI Components - 
